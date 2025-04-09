@@ -13,89 +13,93 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #include <chrono>
 #include <unistd.h>
+#include <thread>
 
 #include <rclcpp/rclcpp.hpp>
 #include <ros2_issues/msg/test_array_column_major.hpp>
 #include <ros2_issues/msg/test_array_complex.hpp>
 #include <ros2_issues/msg/test_array_simple.hpp>
-#include <thread>
 
 using namespace std::chrono_literals;
 
 template <class MsgType>
-struct TestSubscriber : public rclcpp::Node
+class TestSubscriber : public rclcpp::Node
 {
+public:
   explicit TestSubscriber(const rclcpp::NodeOptions & options)
   : Node("test_subscriber", options)
   {
-    window_start_time = get_clock()->now();
+    window_start_time_ = get_clock()->now();
 
-    auto callback =
-      [this](typename MsgType::ConstSharedPtr msg) -> void {
-        (void)msg;
-        this->window_num_msg++;
-      };
+    auto callback = [this](typename MsgType::ConstSharedPtr msg) -> void {
+      (void) msg;
+      this->window_num_msg_++;
+    };
+
     sub_ = create_subscription<MsgType>(
-      "/test_publisher/array",
-      100,
-      callback);
+      "/test_publisher/array", 100, callback);
 
     stats_timer_ = create_wall_timer(1s, [this]() {
       const rclcpp::Time t(this->get_clock()->now());
-      const double elapsed = (t - window_start_time).seconds();
-      const double msg_per_sec = this->window_num_msg / elapsed;
+      const double elapsed = (t - window_start_time_).seconds();
+      const double msg_per_sec = this->window_num_msg_ / elapsed;
 
       RCLCPP_INFO(
           get_logger(),
           "rate: %.6f msgs/sec   messages received: %d   elapsed seconds: %.6f",
           msg_per_sec,
-          window_num_msg,
+          window_num_msg_,
           elapsed);
-      this->window_num_msg = 0;
-      window_start_time = t;
+      this->window_num_msg_ = 0;
+      window_start_time_ = t;
     });
   }
 
-  // -- variables
-  int window_num_msg = 0;
-  rclcpp::Time window_start_time;
+private:
+  int window_num_msg_{0};
+  rclcpp::Time window_start_time_;
   typename rclcpp::Subscription<MsgType>::SharedPtr sub_;
   rclcpp::TimerBase::SharedPtr stats_timer_;
 };
 
+#ifndef COMPOSITION_BUILD
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
 
+  // Decide which message type to use based on command-line options.
   if ((argc > 1) && std::string(argv[1]) == "-s") {
-    auto node =
-      std::make_shared<TestSubscriber<ros2_issues::msg::TestArraySimple>>(
-        rclcpp::NodeOptions());
+    auto node = std::make_shared<TestSubscriber<ros2_issues::msg::TestArraySimple>>(
+      rclcpp::NodeOptions());
     rclcpp::spin(node);
   }
   else if ((argc > 1) && std::string(argv[1]) == "-e") {
-    auto node =
-      std::make_shared<TestSubscriber<ros2_issues::msg::TestArraySimple>>(
-        rclcpp::NodeOptions());
-      rclcpp::experimental::executors::EventsExecutor executor;
-      executor.add_node(node);
-  executor.spin();
+    auto node = std::make_shared<TestSubscriber<ros2_issues::msg::TestArraySimple>>(
+      rclcpp::NodeOptions());
+    rclcpp::experimental::executors::EventsExecutor executor;
+    executor.add_node(node);
+    executor.spin();
   }
   else if ((argc > 1) && std::string(argv[1]) == "-c") {
-    auto node =
-      std::make_shared<TestSubscriber<ros2_issues::msg::TestArrayColumnMajor>>(
-        rclcpp::NodeOptions());
+    auto node = std::make_shared<TestSubscriber<ros2_issues::msg::TestArrayColumnMajor>>(
+      rclcpp::NodeOptions());
     rclcpp::spin(node);
-  } else {
-    auto node =
-      std::make_shared<TestSubscriber<ros2_issues::msg::TestArrayComplex>>(
-        rclcpp::NodeOptions());
+  }
+  else {
+    auto node = std::make_shared<TestSubscriber<ros2_issues::msg::TestArrayComplex>>(
+      rclcpp::NodeOptions());
     rclcpp::spin(node);
   }
 
   rclcpp::shutdown();
   return 0;
 }
+#endif  // COMPOSITION_BUILD
+
+// Register these node classes as components so that they can be loaded into a container.
+#include "rclcpp_components/register_node_macro.hpp"
+RCLCPP_COMPONENTS_REGISTER_NODE(TestSubscriber<ros2_issues::msg::TestArraySimple>)
+RCLCPP_COMPONENTS_REGISTER_NODE(TestSubscriber<ros2_issues::msg::TestArrayColumnMajor>)
+RCLCPP_COMPONENTS_REGISTER_NODE(TestSubscriber<ros2_issues::msg::TestArrayComplex>)

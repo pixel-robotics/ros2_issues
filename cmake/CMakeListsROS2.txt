@@ -1,18 +1,6 @@
 #
-# Copyright 2021 Bernd Pfrommer <bernd.pfrommer@gmail.com>
+# Copyright ...
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -34,6 +22,7 @@ find_package(rclcpp REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(rclcpp_components REQUIRED)
 
 ament_auto_find_build_dependencies(REQUIRED rclcpp)
 
@@ -48,31 +37,50 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 
 ament_export_dependencies(rosidl_default_runtime)
 
+# --- Standalone executables ---
 ament_auto_add_executable(publisher_node
   src/publisher_node.cpp)
-
 rosidl_target_interfaces(publisher_node
   ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
-
 ament_auto_add_executable(subscriber_node
   src/subscriber_node.cpp)
-
 rosidl_target_interfaces(subscriber_node
   ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
-
 ament_auto_add_executable(publisher_node_complex
   src/publisher_node_complex.cpp)
-
 rosidl_target_interfaces(publisher_node_complex
   ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
+# --- Component (shared library) for composition ---
+add_library(ros2_issues_component SHARED
+  src/publisher_node.cpp
+  src/subscriber_node.cpp
+  src/publisher_node_complex.cpp)
+# Define COMPOSITION_BUILD so that main() functions are excluded (assuming you guarded them with #ifndef COMPOSITION_BUILD)
+target_compile_definitions(ros2_issues_component PRIVATE COMPOSITION_BUILD)
+ament_target_dependencies(ros2_issues_component
+  rclcpp
+  rclcpp_components
+  std_msgs
+  builtin_interfaces
+  rosidl_default_runtime)
+# This makes sure the generated message headers are available.
+rosidl_target_interfaces(ros2_issues_component ${PROJECT_NAME} "rosidl_typesupport_cpp")
+rclcpp_components_register_nodes(ros2_issues_component "TestPublisher<ros2_issues::msg::TestArraySimple>")
+
+# --- Install targets ---
 install(TARGETS
   publisher_node
   publisher_node_complex
   subscriber_node
-  DESTINATION lib/${PROJECT_NAME}/)
+  ros2_issues_component
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION lib/${PROJECT_NAME})
+
+install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_cmake REQUIRED)
@@ -88,4 +96,3 @@ if(BUILD_TESTING)
 endif()
 
 ament_package()
-

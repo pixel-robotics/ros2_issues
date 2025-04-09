@@ -14,7 +14,6 @@
 // limitations under the License.
 
 #include <unistd.h>
-
 #include <rclcpp/rclcpp.hpp>
 #include <ros2_issues/msg/test_array_complex.hpp>
 #include <thread>
@@ -55,13 +54,16 @@ struct TestPublisher : public rclcpp::Node
   std::thread thread_;
 };
 
+#ifndef COMPOSITION_BUILD
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
-  auto node =
-    std::make_shared<TestPublisher<ros2_issues::msg::TestArrayComplex>>(
-      rclcpp::NodeOptions());
+  auto node = std::make_shared<TestPublisher<ros2_issues::msg::TestArrayComplex>>(rclcpp::NodeOptions());
   rclcpp::spin(node);
   rclcpp::shutdown();
   return 0;
 }
+#endif  // COMPOSITION_BUILD
+
+#include "rclcpp_components/register_node_macro.hpp"
+RCLCPP_COMPONENTS_REGISTER_NODE(TestPublisher<ros2_issues::msg::TestArrayComplex>)

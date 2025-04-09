@@ -14,7 +14,6 @@
 // limitations under the License.
 
 #include <unistd.h>
-
 #include <rclcpp/rclcpp.hpp>
 #include <ros2_issues/msg/test_array_column_major.hpp>
 #include <ros2_issues/msg/test_array_column_major2.hpp>
@@ -22,6 +21,9 @@
 #include <ros2_issues/msg/test_array_simple.hpp>
 #include <thread>
 #include <vector>
+
+// For composition support: include the component registration header
+#include "rclcpp_components/register_node_macro.hpp"
 
 template <class MsgType>
 struct TestPublisher : public rclcpp::Node
@@ -54,7 +56,6 @@ struct TestPublisher : public rclcpp::Node
       }
     });
   }
-  // -- variables
   typename rclcpp::Publisher<MsgType>::SharedPtr pub_;
   std::thread thread_;
 };
@@ -76,11 +77,10 @@ struct TestPublisherColumnMajor : public rclcpp::Node
       MsgType msg;
       msg.x.resize(numElements);
       msg.y.resize(numElements);
-      //msg.ts.resize(numElements);
+      // msg.ts.resize(numElements);
       msg.secs.resize(numElements);
       msg.nsecs.resize(numElements);
       msg.polarity.resize(numElements);
-
       while (rclcpp::ok()) {
         msg.header.stamp = now();
         pub_->publish(msg);
@@ -96,7 +96,6 @@ struct TestPublisherColumnMajor : public rclcpp::Node
       }
     });
   }
-  // -- variables
   typename rclcpp::Publisher<MsgType>::SharedPtr pub_;
   std::thread thread_;
 };
@@ -135,8 +134,7 @@ struct TestPublisherColumnMajor2 : public rclcpp::Node
         // copy data from driver (row major) to message (column major)
         for (int i = 0; i < numElements; i++) {
           const auto & e = driverData[i];
-          msg.ts[i] =
-            (uint64_t)(e.ts * 1e3);  // driver gives t as float in usec
+          msg.ts[i] = static_cast<uint64_t>(e.ts * 1e3);  // driver gives t as float in usec
           msg.x[i] = e.x;
           msg.y[i] = e.y;
           msg.polarity[i] = e.polarity;
@@ -154,10 +152,11 @@ struct TestPublisherColumnMajor2 : public rclcpp::Node
       }
     });
   }
-  // -- variables
   typename rclcpp::Publisher<MsgType>::SharedPtr pub_;
   std::thread thread_;
 };
+
+#ifndef COMPOSITION_BUILD  // When building as a standalone executable
 
 int main(int argc, char * argv[])
 {
@@ -171,10 +170,9 @@ int main(int argc, char * argv[])
     auto node =
       std::make_shared<TestPublisher<ros2_issues::msg::TestArraySimple>>(
         rclcpp::NodeOptions());
-
-      rclcpp::experimental::executors::EventsExecutor executor;
-      executor.add_node(node);
-  executor.spin();
+    rclcpp::experimental::executors::EventsExecutor executor;
+    executor.add_node(node);
+    executor.spin();
   } else if ((argc > 1) && std::string(argv[1]) == "-c") {
     auto node = std::make_shared<
       TestPublisherColumnMajor<ros2_issues::msg::TestArrayColumnMajor>>(
@@ -194,3 +192,11 @@ int main(int argc, char * argv[])
   rclcpp::shutdown();
   return 0;
 }
+
+#endif  // COMPOSITION_BUILD
+
+// Register the components so they can be dynamically loaded in a composition
+RCLCPP_COMPONENTS_REGISTER_NODE(TestPublisher<ros2_issues::msg::TestArraySimple>)
+RCLCPP_COMPONENTS_REGISTER_NODE(TestPublisherColumnMajor<ros2_issues::msg::TestArrayColumnMajor>)
+RCLCPP_COMPONENTS_REGISTER_NODE(TestPublisherColumnMajor2<ros2_issues::msg::TestArrayColumnMajor2>)
+RCLCPP_COMPONENTS_REGISTER_NODE(TestPublisher<ros2_issues::msg::TestArrayComplex>)
