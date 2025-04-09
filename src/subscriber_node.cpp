@@ -75,7 +75,15 @@ int main(int argc, char * argv[])
       std::make_shared<TestSubscriber<ros2_issues::msg::TestArraySimple>>(
         rclcpp::NodeOptions());
     rclcpp::spin(node);
-  } 
+  }
+  else if ((argc > 1) && std::string(argv[1]) == "-e") {
+    auto node =
+      std::make_shared<TestSubscriber<ros2_issues::msg::TestArraySimple>>(
+        rclcpp::NodeOptions());
+      rclcpp::experimental::executors::EventsExecutor executor;
+      executor.add_node(node);
+  executor.spin();
+  }
   else if ((argc > 1) && std::string(argv[1]) == "-c") {
     auto node =
       std::make_shared<TestSubscriber<ros2_issues::msg::TestArrayColumnMajor>>(
